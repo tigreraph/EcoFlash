@@ -15,7 +15,11 @@ import numpy as np
 import psycopg2
 import plotly.express as px
 import random
+from dotenv import load_dotenv
+from pathlib import Path
 
+load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
 def get_base64_image(image_path):
     with open(image_path, "rb") as img:
         return base64.b64encode(img.read()).decode()
