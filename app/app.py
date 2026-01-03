@@ -15,41 +15,38 @@ import numpy as np
 import psycopg2
 import plotly.express as px
 import random
-from pathlib import Path
-from dotenv import load_dotenv
 
-load_dotenv()
-BASE_DIR = Path(__file__).resolve().parent.parent
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img:
+        return base64.b64encode(img.read()).decode()
+fondo_base64 = get_base64_image("app/assets/fondo.jpeg")
 
-
-video_file = open("app/assets/fondo.mp4", "rb").read()
-video_base64 = base64.b64encode(video_file).decode()
 
 st.markdown(
     f"""
     <style>
         .stApp {{
-            background: none;
+            background-image: url("data:image/jpg;base64,{fondo_base64}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
         }}
 
-        video {{
+        /* Capa oscura SIN BLUR */
+        .stApp::before {{
+            content: "";
             position: fixed;
-            right: 0;
-            bottom: 0;
-            min-width: 100%;
-            min-height: 100%;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
             z-index: -1;
         }}
     </style>
-
-    <video autoplay muted loop>
-        <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
-    </video>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
-# Config DB
+
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
@@ -60,17 +57,10 @@ DB_CONFIG = {
     "sslmode": "require"
 }
 
-
-
-
-
-# Conexión a la BD  de postgresql
-
 @st.cache_resource
 def crear_conexion(db_config):
     try:
-        conn = psycopg2.connect(**db_config)
-        return conn
+        return psycopg2.connect(**db_config)
     except Exception as e:
         st.error(f"❌ Error conectando a la BD: {e}")
         return None
@@ -78,51 +68,26 @@ def crear_conexion(db_config):
 conn = crear_conexion(DB_CONFIG)
 
 
-# Cargar modelos 
-MODEL_DIR = BASE_DIR / "model"
 
 @st.cache_resource
 def cargar_modelos_y_encoders():
-    modelo_regresion = None
-    modelo_clasificacion = None
-    le_placa = None
-    le_sector = None
+    modelo_regresion = pickle.load(open("model/modelo_total_peso.pkl", "rb"))
+    modelo_clasificacion = pickle.load(open("model/modelo_sector_nombre.pkl", "rb"))
 
     try:
-        path_modelo_regresion = os.path.join(MODEL_DIR, "modelo_total_peso.pkl")
-        path_modelo_clasificacion = os.path.join(MODEL_DIR, "modelo_sector_nombre.pkl")
-        path_le_placa = os.path.join(MODEL_DIR, "le_placa.pkl")
-        path_le_sector = os.path.join(MODEL_DIR, "le_sector.pkl")
+        le_placa = pickle.load(open("model/le_placa.pkl", "rb"))
+    except:
+        le_placa = None
 
-        if os.path.exists(path_modelo_regresion):
-            with open(path_modelo_regresion, "rb") as f:
-                modelo_regresion = pickle.load(f)
-        else:
-            st.warning("⚠️ Modelo de regresión no encontrado (modo demostración).")
-
-        if os.path.exists(path_modelo_clasificacion):
-            with open(path_modelo_clasificacion, "rb") as f:
-                modelo_clasificacion = pickle.load(f)
-        else:
-            st.warning("⚠️ Modelo de clasificación no encontrado (modo demostración).")
-
-        if os.path.exists(path_le_placa):
-            with open(path_le_placa, "rb") as f:
-                le_placa = pickle.load(f)
-
-        if os.path.exists(path_le_sector):
-            with open(path_le_sector, "rb") as f:
-                le_sector = pickle.load(f)
-
-    except Exception as e:
-        st.error(f"❌ Error cargando modelos/encoders: {e}")
+    try:
+        le_sector = pickle.load(open("model/le_sector.pkl", "rb"))
+    except:
+        le_sector = None
 
     return modelo_regresion, modelo_clasificacion, le_placa, le_sector
 
 modelo_regresion, modelo_clasificacion, le_placa, le_sector = cargar_modelos_y_encoders()
 
-
-# Cache data
 
 @st.cache_data
 def cargar_sectores(_conn):
@@ -144,19 +109,14 @@ def cargar_registros(_conn):
     """
     df = pd.read_sql(q, _conn)
 
-    if "fecha_ingreso" in df.columns and "fecha" not in df.columns:
-        df = df.rename(columns={"fecha_ingreso": "fecha"})
+    # Limpieza
+    if "fecha_ingreso" in df.columns:
+        df.rename(columns={"fecha_ingreso": "fecha"}, inplace=True)
 
-    # Convertir horas
-    if "hora_ingreso" in df.columns:
-        df["hora_ingreso"] = pd.to_datetime(df["hora_ingreso"], errors="coerce").dt.hour
-    if "hora_salida" in df.columns:
-        df["hora_salida"] = pd.to_datetime(df["hora_salida"], errors="coerce").dt.hour
-
-    # Deltas
+    df["hora_ingreso"] = pd.to_datetime(df["hora_ingreso"], errors="coerce").dt.hour
+    df["hora_salida"] = pd.to_datetime(df["hora_salida"], errors="coerce").dt.hour
     df["delta_peso"] = df["peso_salida"] - df["peso_inicial"]
     df["duracion_horas"] = df["hora_salida"] - df["hora_ingreso"]
-
     df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
     df["dia_semana"] = df["fecha"].dt.dayofweek
 
@@ -164,145 +124,171 @@ def cargar_registros(_conn):
 
     return df
 
-
-# Imagen base64
-
-def get_base64_image(image_path):
-    try:
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode()
-    except:
-        return None
-
-
-# Estilos
 st.markdown("""
 <style>
 
-.card {
-    background: rgba(30, 30, 30, 0.4); 
-    backdrop-filter: blur(15px); 
-    border-radius: 20px;
-    padding: 40px 60px; 
-    margin-top: 15vh;
-    text-align: center;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+/* ===== TEXTO GENERAL ===== */
+.stApp, 
+.stApp * {
+    color: #FFFFFF !important;
 }
 
+/* ===== SIDEBAR ===== */
+[data-testid="stSidebar"] {
+    background: rgba(15, 15, 15, 0.45) !important;
+    backdrop-filter: blur(10px);
+}
+
+/* ===== CARDS ===== */
+.card {
+    background: rgba(30, 30, 30, 0.40);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 40px 60px;
+    margin-top: 15vh;
+    text-align: center;
+}
+
+.card_interno {
+    background: rgba(25, 25, 25, 0.45);
+    border-radius: 20px;
+    padding: 25px 35px;
+}
+
+/* ===== TÍTULOS ===== */
 .titulo {
-    color: #00C853; 
     font-size: 58px;
-    font-weight: 900; 
-    margin-bottom: 15px;
-    text-shadow: none; 
+    font-weight: 900;
+    color: #00C853;
 }
 
 .subtitulo {
-    color: #E0E0E0; 
     font-size: 26px;
-    font-weight: 300; 
-    margin-bottom: 27px;
+    color: #E0E0E0;
 }
 
-.autores, .fecha {
-    color: #FFFFFF;
-    font-size: 18px;
-}
-
-.stButton>button {
-    background-color: #00C853; 
-    color: white; 
-    border-radius: 12px; 
-    padding: 10px 25px; 
-    font-size: 18px;
-    box-shadow: 0 4px 12px rgba(0, 200, 83, 0.5); 
-    transition: all 0.2s ease-in-out;
-}
-
-.stButton>button:hover {
-    background-color: #00A949;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(0, 200, 83, 0.6);
-}
-
-
-/* ==== TARJETA INTERNA (Inicio) ==== */
-.card_interno {
-    background: rgba(20, 20, 20, 0.55);
-    backdrop-filter: blur(18px);
-    border-radius: 22px;
-    padding: 40px 55px;
-    margin-top: 40px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.45);
-}
-
-/* ===== TÍTULO PRINCIPAL "Bienvenido a EcoFlash" ===== */
 .titulo_interno {
-    color: #FFFFFF;
     font-size: 50px;
     font-weight: 900;
     text-align: center;
     -webkit-text-stroke: 1px #00C853;
+}
+
+.subtitulo_descripcion {
+    color: #00FF88;
+    font-size: 30px;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 26px;
     text-shadow:
-        0 0 10px rgba(0, 200, 83, 0.8),
-        0 0 25px rgba(0, 200, 83, 0.5);
-    margin-bottom: 25px;
+        0px 2px 6px rgba(0,0,0,0.9),
+        0px 0px 10px rgba(0,255,136,0.4);
 }
 
-/* ==== TEXTO DESCRIPTIVO ==== */
+/* ===== TEXTO INICIO ===== */
 .textoinicio {
-    color: #F1F8E9;
-    font-size: 20px;
-    font-weight: 350;
-    line-height: 1.65;
-    text-shadow: 0 0 5px rgba(0,0,0,0.6);
-    padding: 10px 5px;
+    background: rgba(0, 0, 0, 0.70);
+    padding: 32px 38px;
+    border-radius: 20px;
+    max-width: 900px;
+    margin: 0 auto;
 }
 
-/* ==== SUBTÍTULOS ==== */
-.textoinicio h3, .textoinicio h4 {
-    color: #A5D6A7;
-    font-weight: 700;
-    margin-top: 25px;
-    text-shadow: 0 0 6px rgba(0, 150, 70, 0.7);
+.textoinicio p {
+    font-size: 21px;
+    line-height: 1.8;
+    text-align: justify;
+    text-shadow: 0px 2px 6px rgba(0,0,0,0.85);
 }
 
-/* ==== LOGO ==== */
-img {
-    filter: drop-shadow(0 0 25px rgba(0,0,0,0.7));
+.textoinicio strong {
+    color: #00FF88;
+    font-weight: 800;
 }
 
-/* ==== BOTONES INTERNOS ==== */
+/* ===== BOTONES ===== */
 .stButton > button {
     background: linear-gradient(135deg, #00C853, #00E676);
-    color: white;
+    color: #FFFFFF;
     border-radius: 14px;
     padding: 12px 27px;
     font-size: 19px;
     border: none;
-    box-shadow: 0 6px 18px rgba(0, 200, 83, 0.45);
-    transition: 0.25s ease-in-out;
+    transition: 0.25s;
 }
 
-.stButton > button:hover {
-    background: linear-gradient(135deg, #00E676, #00C853);
-    transform: translateY(-3px) scale(1.03);
-    box-shadow: 0 10px 25px rgba(0, 200, 83, 0.7);
+/* ===== FILE UPLOADER ===== */
+[data-testid="stFileUploader"] {
+    background: rgba(15, 15, 15, 0.9) !important;
+    border-radius: 15px;
+    padding: 20px;
+    border: 2px dashed #00FF88;
 }
 
-/* Nuevo estilo para los SUBTÍTULOS (e.g., ¿Qué es EcoFlash?) */
-.subtitulo_descripcion {
-    font-size: 28px; 
-    font-weight: bold;
-    color: #1B5E20; /* Verde oscuro (más elegante que el negro puro) */
-    margin-top: 25px;
-    margin-bottom: 15px;
+[data-testid="stFileUploader"] section {
+    background: transparent !important;
+}
+
+[data-testid="stFileUploader"] label {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+[data-testid="stFileUploader"] small {
+    color: #CCCCCC !important;
+}
+
+[data-testid="stFileUploader"] button {
+    background: linear-gradient(135deg, #00C853, #00E676) !important;
+    color: #000000 !important;
+    border-radius: 10px !important;
+    padding: 10px 18px !important;
+    font-weight: 700 !important;
+}
+
+/* ===== SELECTBOX FIX ABSOLUTO ===== */
+
+/* Caja del select */
+[data-testid="stSelectbox"] div[aria-haspopup="listbox"] {
+    background-color: #0B0B0B !important;
+    border: 2px solid #00FF88 !important;
+    border-radius: 14px !important;
+}
+
+/* TEXTO SELECCIONADO (ESTE ES EL BUENO) */
+[data-testid="stSelectbox"] div[aria-haspopup="listbox"] span {
+    color: #FFFFFF !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    background: transparent !important;
+}
+
+/* Flecha */
+[data-testid="stSelectbox"] svg {
+    fill: #00FF88 !important;
+}
+
+/* Dropdown */
+div[role="listbox"] {
+    background-color: #0B0B0B !important;
+    border: 1px solid #00FF88 !important;
+    border-radius: 12px !important;
+}
+
+/* Opciones */
+div[role="option"] {
+    color: #FFFFFF !important;
+    font-size: 16px !important;
+}
+
+/* Hover opción */
+div[role="option"]:hover {
+    background-color: rgba(0, 255, 136, 0.25) !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# Portada
 
 if "show_portada" not in st.session_state:
     st.session_state.show_portada = True
@@ -311,9 +297,9 @@ if st.session_state.show_portada:
     st.markdown(f"""
     <div class="card">
       <div class="titulo">EcoFlash ♻️</div>
-      <div class="subtitulo">Herramienta digital para aprender y practicar el reciclaje responsable en la ciudad de Cuenca.</div>
-      <p class="autores"><b>Autores:</b> Allison Bueno • Jonathan Tigre</p>
-      <p class="fecha"><b>Fecha:</b> {date.today().strftime("%d/%m/%Y")}</p>
+      <div class="subtitulo">Herramienta digital para aprender y practicar el reciclaje responsable en Cuenca.</div>
+      <p><b>Autores:</b> Allison Bueno • Jonathan Tigre • Justin Escalante</p>
+      <p><b>Fecha:</b> {date.today().strftime("%d/%m/%Y")}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -323,220 +309,340 @@ if st.session_state.show_portada:
     st.stop()
 
 
-# Menú
-
 menu = st.sidebar.radio(
     "📋 Menú de navegación",
-    ["🏠 Inicio", "🧠 Clasificación de residuos", "🧮 Predicciones de registros", "💾 Base de datos", "ℹ️ Acerca de"]
+    ["🏠 Inicio", "🧠 Clasificación de residuos", "🧮 Predicciones de registros", "🗺️ Mapeo de cantones", "🏭 Empresas que más residuos generan", "ℹ️ Acerca de"]
 )
 
-# 🏠 INICIO
 if menu == "🏠 Inicio":
-    
-    # Usa un contenedor para el contenido de la página
+
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
-    
-    # --- CABECERA Y LOGO ---
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        # Mostrar logo
-        try:
-            # Hacemos el logo más pequeño y centrado
-            st.image("logo.png", width=200) 
-        except FileNotFoundError:
-            st.warning("⚠ No se encontró 'logo.png'.")
-
-        # Título principal de la sección
-        st.markdown(
-            '<h2 class="titulo_interno">🌿 Bienvenido a EcoFlash 🌿</h2>', 
-            unsafe_allow_html=True
-        )
-
-    # --- CONTENIDO DESCRIPTIVO ---
-    
-    # Usamos una columna para alinear el texto descriptivo a la izquierda (o justificado)
-    st.markdown('<div class="text_card">', unsafe_allow_html=True)
-    
-    
     st.markdown(
-        """
-        <h3 class="subtitulo_descripcion">🌱 ¿Qué es EcoFlash?</h3>
-        """, unsafe_allow_html=True
+        '<h2 class="titulo_interno">🌿 Bienvenido a EcoFlash 🌿</h2>',
+        unsafe_allow_html=True
     )
-    
+
     st.markdown("""
-        <div class="textoinicio">
-        EcoFlash es tu **herramienta digital interactiva** diseñada para impulsar el **reciclaje responsable** en la ciudad de Cuenca, Ecuador. Nuestro objetivo es hacer que la clasificación de residuos sea accesible, educativa y basada en datos.
+    <div class="subtitulo_descripcion">🌱 ¿Qué es EcoFlash?</div>
 
-        ### 🤖 La Tecnología detrás
-        
-        Esta aplicación utiliza dos componentes clave de **Inteligencia Artificial** para potenciar sus funcionalidades:
-        
-        * **Clasificación de Residuos:** Empleamos una avanzada **Red Neuronal Convolucional (CNN)**, la cual puede identificar y clasificar automáticamente distintos tipos de residuos sólidos (plástico, metal, vidrio, etc.) a partir de una imagen.
-        * **Análisis Predictivo:** Utilizamos **Modelos de Regresión y Clasificación** (cargados como `.pkl`) junto a la base de datos PostgreSQL para predecir patrones de reciclaje, como el peso total de material recogido o la próxima zona de recolección.
-        
-        ### 📊 Explora las Secciones
-        
-        Utiliza el menú de navegación a la izquierda para:
-        
-        * **Clasificación de residuos:** Sube una imagen y recibe una predicción instantánea del tipo de material.
-        * **Predicciones de registros:** Consulta las predicciones de peso y sector de recolección basadas en datos históricos.
-        * **Base de datos:** Explora los datos brutos de los registros de reciclaje.
-        * **Acerca de:** Conoce a los autores del proyecto.</div>
-        
+    <div class="textoinicio">
+        <p>
+            EcoFlash es una herramienta digital interactiva diseñada para impulsar el
+            <strong>reciclaje responsable</strong> en la ciudad de Cuenca.
+            Utiliza una <strong>Red Neuronal Convolucional (CNN)</strong> para clasificar imágenes de residuos
+            y recomendar el tipo correcto de funda o tacho según la normativa municipal.
+            Permite visualizar información, registrar datos y analizar estadísticas ambientales.
+            Con EcoFlash, reciclar es más fácil, rápido e inteligente ♻️✨
+        </p>
+    </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True) 
-    
-    
-    # ----- CLASIFICACIÓN -----
+
 elif menu == "🧠 Clasificación de residuos":
-        st.markdown('<div class="card fadeIn">', unsafe_allow_html=True)
-        
-        with st.expander("📘 Información sobre clasificación y reciclaje"):
-            # Mostrar logo dentro del expander
-            try:
-                st.markdown("Logo placeholder", unsafe_allow_html=True)
-            except FileNotFoundError:
-                st.warning("⚠️ Logo no encontrado. Asegúrate de que 'logo.png' esté en la carpeta del proyecto.")
 
-            # Texto informativo
-            st.markdown("""
-            <div style='font-size:17px; line-height:1.6;'>
-                <p>📸 <b>En esta sección puedes subir una imagen</b> de un residuo y nuestro modelo de <b>Inteligencia Artificial</b> lo clasificará en una de las siguientes categorías:</p>
-                <ul>
-                    <li>♻️ <b>Plástico</b></li>
-                    <li>📄 <b>Papel</b></li>
-                    <li>🍃 <b>Orgánico</b></li>
-                    <li>🍶 <b>Vidrio</b></li>
-                    <li>🥫 <b>Metal</b></li>
-                </ul>
+    st.markdown('<div class="card_interno">', unsafe_allow_html=True)
 
-            <p>🗑️ <b>Colores de las fundas recomendadas:</b></p>
-                <ul>
-                    <li><span style='color:#FFD600;'><b>Amarilla</b></span>: Plástico</li>
-                    <li><span style='color:#03A9F4;'><b>Celeste</b></span>: Papel</li>
-                    <li><span style='color:#388E3C;'><b>Verde</b></span>: Orgánico</li>
-                    <li><span style='color:#9E9E9E;'><b>Gris</b></span>: Vidrio</li>
-                    <li><span style='color:#E53935;'><b>Roja</b></span>: Metal</li>
-                </ul>
+    with st.expander("📘 Información sobre clasificación y reciclaje"):
+        st.markdown("""
+        <div style='font-size:17px; line-height:1.6;'>
+            <p>📸 Sube una imagen y EcoFlash la clasificará automáticamente usando IA.</p>
+            <ul>
+                <li>♻️ Plástico</li>
+                <li>📄 Papel</li>
+                <li>🍃 Orgánico</li>
+                <li>🍶 Vidrio</li>
+                <li>🥫 Metal</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
-            <p>🚮 <b>Colores de los tachos de reciclaje:</b></p>
-                <ul>
-                    <li><span style='color:#FFD600;'><b>Amarillo</b></span>: Plástico</li>
-                    <li><span style='color:#1976D2;'><b>Azul</b></span>: Papel</li>
-                    <li><span style='color:#388E3C;'><b>Verde</b></span>: Orgánico</li>
-                    <li><span style='color:#9E9E9E;'><b>Gris</b></span>: Vidrio</li>
-                    <li><span style='color:#E53935;'><b>Rojo</b></span>: Metal</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
 
-        # --- Clasificador ---
-        st.header("🧩 Clasificador Inteligente")
-        uploaded_file = st.file_uploader("📸 Sube una imagen del residuo", type=["jpg", "jpeg", "png"])
-        
-        if uploaded_file:
-            st.image(uploaded_file, caption="Imagen cargada", use_container_width=True)
-            st.info("🔍 Analizando imagen...")
+    st.header("🧩 Clasificador Inteligente")
 
-            clases = ["Plástico", "Papel", "Orgánico", "Vidrio", "Metal"]
-            pred = random.choice(clases)
-            colores = {
-                "Plástico": "Amarilla",
-                "Papel": "Celeste",
-                "Orgánico": "Verde",
-                "Vidrio": "Gris",
-                "Metal": "Roja"
-            }
+    uploaded_file = st.file_uploader(
+        "📸 **Sube una imagen del residuo**",
+        type=["jpg", "jpeg", "png"],
+        label_visibility="visible"
+    )
 
-            st.success(f"✅ El modelo predice: **{pred}**")
-            st.markdown(f"<h4>🗑️ Funda recomendada: <span style='color:#2E7D32'>{colores[pred]}</span></h4>", unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# 🧮  PREDICCIONES
+    st.markdown("</div>", unsafe_allow_html=True)
 
 elif menu == "🧮 Predicciones de registros":
+    st.markdown('<div class="card_interno">', unsafe_allow_html=True)
     st.header("🧮 Predicción por sector")
 
-    # Cargar datos
-    @st.cache_data
-    def cargar_todo():
-        sectores = cargar_sectores(conn)
-        registros = cargar_registros(conn)
-        return sectores, registros
 
-    sectores_df, registros_df = cargar_todo()
+    # CARGA OPTIMIZADA DE DATOS
+    @st.cache_data(show_spinner=False)
+    def cargar_sectores_cached():
+        return cargar_sectores(conn)
 
-  
-    # 1) FILTRO DE SECTOR
+    @st.cache_data(show_spinner=False)
+    def cargar_registros_cached():
+        return cargar_registros(conn)
 
-    sector = st.selectbox("🏙️ Selecciona un sector", sectores_df["nombre_sector"])
+    @st.cache_data(show_spinner=False)
+    def comparativa_por_sector(df):
+        return (
+            df.groupby("nombre_sector", as_index=False)["total"]
+            .sum()
+            .sort_values(by="total", ascending=False)
+        )
 
-    df_sector = registros_df[registros_df["nombre_sector"] == sector].copy()
+    sectores_df = cargar_sectores_cached()
+    registros_df = cargar_registros_cached()
+
+    sector = st.selectbox(
+        "🏙️ Selecciona un sector",
+        sectores_df["nombre_sector"].unique()
+    )
+
+    # Filtrar SOLO el sector seleccionado
+    df_sector = registros_df.loc[
+        registros_df["nombre_sector"] == sector
+    ]
 
     if df_sector.empty:
-        st.warning("No hay datos para este mes en el sector seleccionado.")
+        st.warning("No hay datos registrados para este sector.")
         st.stop()
 
-
-  
-    # 2) GRÁFICO DEL SECTOR
-
+ 
     if "fecha" in df_sector.columns:
-        st.subheader("📈 Tendencia del total")
         fig1 = px.line(
             df_sector,
             x="fecha",
             y="total",
             markers=True,
-            title=f"Total de residuos - {sector}"
+            title=f"📈 Total de residuos - {sector}"
         )
+        fig1.update_layout(height=350)
         st.plotly_chart(fig1, use_container_width=True)
 
-    
-    # 3) COMPARACIÓN ENTRE SECTORES
-    
-    st.header("📊 Comparación entre sectores")
 
-    comparativa = (
-        registros_df.groupby("nombre_sector")["total"]
-        .sum()
-        .reset_index()
-        .sort_values(by="total", ascending=False)
+    st.subheader("📊 Comparación entre sectores")
+
+    comparativa = comparativa_por_sector(registros_df)
+
+    st.dataframe(
+        comparativa,
+        use_container_width=True,
+        height=350
     )
-
-    st.subheader(f"📋 Totales por sector")
-    st.dataframe(comparativa, use_container_width=True)
 
     fig2 = px.bar(
         comparativa,
         x="nombre_sector",
         y="total",
-        title=f"Comparación de residuos por sector"
+        title="♻️ Total de residuos por sector"
     )
+    fig2.update_layout(height=400)
     st.plotly_chart(fig2, use_container_width=True)
 
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
+elif menu == "🗺️ Mapeo de cantones":
 
-# 💾 Base de Datos
+    st.markdown('<div class="card_interno">', unsafe_allow_html=True)
+    st.header("🗺️ Mapeo de Cantones – Residuos 2024")
 
-elif menu == "💾 Base de datos":
-    st.header("🗄️ Bases de Datos")
-    st.write("- PostgreSQL para registros")
-    st.write("- MongoDB para imágenes")
+    data_cantones = {
+        "canton": [
+            "Cañar", "Chordeleg", "Deleg", "El Pan", "Guachapala",
+            "Gualaceo", "Saraguro", "Sevilla de Oro", "Sigsig"
+        ],
+        "total_ton": [
+            279.35, 1381.22, 610.55, 203.04, 361.82,
+            5948.98, 1832.75, 371.57, 2249.54
+        ],
+        "porcentaje": [
+            2.11, 10.43, 4.61, 1.53, 2.73,
+            44.94, 13.84, 2.81, 16.99
+        ],
+        "lat": [
+            -2.560, -2.922, -2.734, -2.720, -2.783,
+            -2.892, -3.606, -2.744, -2.910
+        ],
+        "lon": [
+            -78.940, -78.780, -78.840, -78.850, -78.820,
+            -78.780, -79.210, -78.760, -78.780
+        ]
+    }
+
+    df_map = pd.DataFrame(data_cantones)
+
+    st.subheader("📍 Selecciona un cantón")
+    canton_sel = st.selectbox("Cantón", df_map["canton"])
+
+    df_sel = df_map[df_map["canton"] == canton_sel]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "♻️ Total de residuos (TON)",
+            f"{df_sel['total_ton'].values[0]:,.2f}"
+        )
+
+    with col2:
+        st.metric(
+            "📊 Porcentaje del total",
+            f"{df_sel['porcentaje'].values[0]} %"
+        )
+
+    st.markdown("---")
 
 
-# ℹ️ ACERCA DE
+    st.subheader("🌍 Distribución geográfica de residuos")
+
+    fig = px.scatter_mapbox(
+        df_map,
+        lat="lat",
+        lon="lon",
+        size="total_ton",
+        color="total_ton",
+        hover_name="canton",
+        hover_data={
+            "total_ton": True,
+            "porcentaje": True,
+            "lat": False,
+            "lon": False
+        },
+        zoom=7,
+        height=520,
+        size_max=45,
+        color_continuous_scale="greens"
+    )
+
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        margin={"r": 0, "t": 0, "l": 0, "b": 0}
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("📋 Comparación entre cantones")
+
+    st.dataframe(
+        df_map.sort_values("total_ton", ascending=False),
+        use_container_width=True
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+elif menu == "🏭 Empresas que más residuos generan":
+
+    st.markdown("## 🏭 Empresas que más residuos generan")
+    st.markdown(
+        "Visualización de los principales generadores de residuos según el total registrado."
+    )
+
+    data_generadores = {
+        "Generador": [
+            "ETAPA",
+            "Cartopel",
+            "Curtiembre Renaciente",
+            "Plásticos Rival",
+            "Almacenes Juan Eljuri",
+            "Gerardo Ortiz e Hijos",
+            "Centro Sur",
+            "La Europea",
+            "Embuandes",
+            "Termovent",
+            "Italimentos",
+            "Piggis",
+            "Projasa",
+            "Vías del Austro (Grupo Graiman)",
+            "Corporación Aeroportuaria de Cuenca (CORPAC)",
+            "Austro Gas"
+        ],
+        "Total_Toneladas": [
+            3963.05,
+            275.13,
+            101.65,
+            87.45,
+            41.44,
+            48.20,
+            26.36,
+            28.71,
+            18.57,
+            18.95,
+            15.06,
+            14.40,
+            2.72,
+            1.10,
+            0.33,
+            0.05
+        ]
+    }
+
+    df_generadores = pd.DataFrame(data_generadores)
+
+
+    top_n = st.radio(
+        "📊 Seleccione el ranking",
+        options=[5, 10],
+        horizontal=True
+    )
+
+    df_top = (
+        df_generadores
+        .sort_values("Total_Toneladas", ascending=False)
+        .head(top_n)
+        .reset_index(drop=True)
+    )
+
+    df_top.index += 1
+
+    col1, col2 = st.columns(2)
+
+    col1.metric(
+        "🏭 Generador líder",
+        df_top.loc[1, "Generador"]
+    )
+
+    col2.metric(
+        "♻️ Toneladas del líder",
+        f"{df_top.loc[1, 'Total_Toneladas']} ton"
+    )
+
+    st.divider()
+
+    fig_bar = px.bar(
+        df_top,
+        x="Total_Toneladas",
+        y="Generador",
+        orientation="h",
+        text="Total_Toneladas",
+        title=f"📊 Top {top_n} Generadores Especiales",
+    )
+
+    fig_bar.update_layout(
+        yaxis=dict(autorange="reversed"),
+        xaxis_title="Toneladas",
+        yaxis_title="Generador"
+    )
+
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+
+    st.markdown("### 📋 Detalle del ranking")
+    st.dataframe(
+        df_top.rename_axis("Ranking"),
+        use_container_width=True
+    )
+
+    st.info(
+        "📌 Este ranking permite identificar a los principales generadores de residuos, "
+        "sirviendo como base para estrategias de control, reciclaje y gestión ambiental."
+    )
 
 elif menu == "ℹ️ Acerca de":
-    st.header("👩‍💻 Sobre el proyecto")
-    st.write("EcoFlash — Proyecto del Instituto Tecnológico del Azuay (2025)")
 
-# Footer
+    st.header("👩‍💻 Sobre el proyecto")
+    st.write("EcoFlash — Proyecto académico del Instituto Tecnológico del Azuay (2025)")
+    st.write("Autores: Allison Bueno • Jonathan Tigre • Justin Escalante")
+
+
 st.markdown("""
 <hr>
 <center><p style='color:gray; font-size:14px'>EcoFlash © 2025 — Proyecto educativo del Instituto Tecnológico del Azuay 🌎</p></center>
