@@ -69,26 +69,50 @@ conn = crear_conexion(DB_CONFIG)
 
 
 
+# Cargar modelos 
+MODEL_DIR = BASE_DIR / "model"
+
 @st.cache_resource
 def cargar_modelos_y_encoders():
-    modelo_regresion = pickle.load(open("model/modelo_total_peso.pkl", "rb"))
-    modelo_clasificacion = pickle.load(open("model/modelo_sector_nombre.pkl", "rb"))
+    modelo_regresion = None
+    modelo_clasificacion = None
+    le_placa = None
+    le_sector = None
 
     try:
-        le_placa = pickle.load(open("model/le_placa.pkl", "rb"))
-    except:
-        le_placa = None
+        path_modelo_regresion = os.path.join(MODEL_DIR, "modelo_total_peso.pkl")
+        path_modelo_clasificacion = os.path.join(MODEL_DIR, "modelo_sector_nombre.pkl")
+        path_le_placa = os.path.join(MODEL_DIR, "le_placa.pkl")
+        path_le_sector = os.path.join(MODEL_DIR, "le_sector.pkl")
 
-    try:
-        le_sector = pickle.load(open("model/le_sector.pkl", "rb"))
-    except:
-        le_sector = None
+        if os.path.exists(path_modelo_regresion):
+            with open(path_modelo_regresion, "rb") as f:
+                modelo_regresion = pickle.load(f)
+        else:
+            st.warning("⚠️ Modelo de regresión no encontrado (modo demostración).")
+
+        if os.path.exists(path_modelo_clasificacion):
+            with open(path_modelo_clasificacion, "rb") as f:
+                modelo_clasificacion = pickle.load(f)
+        else:
+            st.warning("⚠️ Modelo de clasificación no encontrado (modo demostración).")
+
+        if os.path.exists(path_le_placa):
+            with open(path_le_placa, "rb") as f:
+                le_placa = pickle.load(f)
+
+        if os.path.exists(path_le_sector):
+            with open(path_le_sector, "rb") as f:
+                le_sector = pickle.load(f)
+
+    except Exception as e:
+        st.error(f"❌ Error cargando modelos/encoders: {e}")
 
     return modelo_regresion, modelo_clasificacion, le_placa, le_sector
 
 modelo_regresion, modelo_clasificacion, le_placa, le_sector = cargar_modelos_y_encoders()
 
-
+## cache data
 @st.cache_data
 def cargar_sectores(_conn):
     if _conn is None:
