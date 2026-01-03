@@ -74,6 +74,7 @@ conn = crear_conexion(DB_CONFIG)
 
 
 # Cargar modelos 
+# Cargar modelos 
 MODEL_DIR = BASE_DIR / "model"
 
 @st.cache_resource
@@ -84,11 +85,13 @@ def cargar_modelos_y_encoders():
     le_sector = None
 
     try:
-        path_modelo_regresion = os.path.join(MODEL_DIR, "modelo_total_peso.pkl")
-        path_modelo_clasificacion = os.path.join(MODEL_DIR, "modelo_sector_nombre.pkl")
-        path_le_placa = os.path.join(MODEL_DIR, "le_placa.pkl")
-        path_le_sector = os.path.join(MODEL_DIR, "le_sector.pkl")
+        # Usar rutas absolutas para asegurar que los archivos estén accesibles
+        path_modelo_regresion = os.path.join(str(MODEL_DIR), "modelo_total_peso.pkl")
+        path_modelo_clasificacion = os.path.join(str(MODEL_DIR), "modelo_sector_nombre.pkl")
+        path_le_placa = os.path.join(str(MODEL_DIR), "le_placa.pkl")
+        path_le_sector = os.path.join(str(MODEL_DIR), "le_sector.pkl")
 
+        # Verificar si los archivos existen y cargarlos con pickle
         if os.path.exists(path_modelo_regresion):
             with open(path_modelo_regresion, "rb") as f:
                 modelo_regresion = pickle.load(f)
@@ -113,7 +116,6 @@ def cargar_modelos_y_encoders():
         st.error(f"❌ Error cargando modelos/encoders: {e}")
 
     return modelo_regresion, modelo_clasificacion, le_placa, le_sector
-
 modelo_regresion, modelo_clasificacion, le_placa, le_sector = cargar_modelos_y_encoders()
 
 ## cache data
