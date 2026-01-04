@@ -4,3 +4,5 @@ numpy>=1.24.0
 psycopg2-binary>=2.9.9
 plotly>=5.18.0
 scikit-learn
+from dotenv import load_dotenv
+load_dotenv()>=0.21.0
