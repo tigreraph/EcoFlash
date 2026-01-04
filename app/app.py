@@ -158,7 +158,7 @@ def cargar_registros(_conn):
     return df
 ## clasificacion
 # Cargar el modelo entrenado
-MODEL_PATH = 'resnet50_hf_final.pt'  # Ajusta la ruta si es necesario
+MODEL_PATH = 'model/resnet50_hf_final.pt'  # Ajusta la ruta si es necesario
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = models.resnet50(weights=None)
@@ -425,14 +425,19 @@ elif menu == "🧠 Clasificación de residuos":
         """, unsafe_allow_html=True)
 
     st.header("🧩 Clasificador Inteligente")
-    
+
     # Subir imagen
     uploaded_file = st.file_uploader("📸 **Sube una imagen del residuo**", type=["jpg", "jpeg", "png"], label_visibility="visible")
 
     if uploaded_file is not None:
-        # Mostrar la imagen cargada
+        # Mostrar la imagen cargada en un contenedor
         image = Image.open(uploaded_file)
-        st.image(image, caption="Imagen cargada", use_column_width=True)
+        
+        # Crear dos columnas para dividir la imagen y la predicción
+        col1, col2 = st.columns([2, 3])
+
+        with col1:
+            st.image(image, caption="Imagen cargada", use_container_width=True)
 
         # Clases de residuos
         class_names = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
@@ -440,18 +445,35 @@ elif menu == "🧠 Clasificación de residuos":
         # Realizar la predicción
         prediccion, probabilidades = predict_and_show(image, model, infer_transforms, class_names)
 
-        # Mostrar la predicción
-        st.write(f"Predicción: {prediccion}")
-        st.write(f"Probabilidades:")
+        # Mostrar la predicción y las probabilidades en la segunda columna
+        with col2:
+            st.subheader(f"Predicción: {prediccion}")
+            st.write(f"Probabilidades:")
 
-        for cls, prob in zip(class_names, probabilidades):
-            st.write(f"{cls}: {prob * 100:.2f}%")
+            for cls, prob in zip(class_names, probabilidades):
+                st.write(f"{cls}: {prob * 100:.2f}%")
 
-        # Mostrar la imagen con la predicción
-        st.write(f"Predicción: {prediccion}")
-        st.image(image, caption=f"Clasificado como: {prediccion}", use_column_width=True)
+        # Añadir un diseño más limpio y evitar la duplicación de la imagen
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+# Aplicar el fondo blanco y cambiar el color de las letras en el área de resultados
+st.markdown("""
+    <style>
+        .card_interno {
+            background-color: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .card_interno h1 {
+            color: #2e7d32;
+            font-size: 30px;
+        }
+        .card_interno p {
+            color: #333;
+        }
+    </style>
+""", unsafe_allow_html=True)
 elif menu == "🧮 Predicciones de registros":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
     st.header("🧮 Predicción por sector")
