@@ -407,7 +407,7 @@ if menu == "🏠 Inicio":
     </div>
     """, unsafe_allow_html=True)
 
-if menu == "🧠 Clasificación de residuos":
+elif menu == "🧠 Clasificación de residuos":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
 
     with st.expander("📘 Información sobre clasificación y reciclaje"):
@@ -440,18 +440,20 @@ if menu == "🧠 Clasificación de residuos":
             st.image(image, caption="Imagen cargada", use_container_width=True)
 
         # Clases de residuos
-        class_names = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
+        class_names = ['Cartón', 'Vidrio', 'Metal', 'Papel', 'Plástico', 'Basura']
 
         # Realizar la predicción
         prediccion, probabilidades = predict_and_show(image, model, infer_transforms, class_names)
 
         # Mostrar la predicción y las probabilidades en la segunda columna
         with col2:
+            st.markdown("<div style='background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);'>", unsafe_allow_html=True)
             st.subheader(f"Predicción: {prediccion}")
             st.write(f"Probabilidades:")
 
             for cls, prob in zip(class_names, probabilidades):
                 st.write(f"{cls}: {prob * 100:.2f}%")
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # Añadir un diseño más limpio y evitar la duplicación de la imagen
         st.markdown("</div>", unsafe_allow_html=True)
@@ -466,17 +468,19 @@ if menu == "🧠 Clasificación de residuos":
                     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
                 }
                 .card_interno h1 {
-                    color: #2e7d32;
+                    color: #2e7d32;  # Color verde para el título
                     font-size: 30px;
                 }
                 .card_interno p {
-                    color: #333;
+                    color: #333;  # Color oscuro para el texto
                 }
                 .card_interno .stFileUploader {
-                margin-bottom: 20px;
+                    margin-bottom: 20px;
                 }
             </style>
         """, unsafe_allow_html=True)
+
+
 elif menu == "🧮 Predicciones de registros":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
     st.header("🧮 Predicción por sector")
