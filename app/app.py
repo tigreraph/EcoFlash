@@ -186,11 +186,10 @@ def predict_and_show(image, model, transform, class_names):
     with torch.no_grad():
         outputs = model(input_tensor)
         probs = F.softmax(outputs, dim=1)
-        confidence, predicted = torch.max(probs, 1)
 
-    predicted_class = class_names[predicted.item()]
-    confidence = confidence.item()
-    probs = probs.squeeze().cpu().numpy()
+    probs = probs.squeeze().cpu().numpy() * 100
+    predicted = np.argmax(probs)
+    predicted_class = class_names[predicted]
 
     return predicted_class, probs
 # Asignación de colores de fundas
@@ -204,6 +203,22 @@ def get_bag_color(material):
         "basura": "negro"        # Basura va en funda negra
     }
     return bag_colors.get(material, "negro")  # Por defecto se asigna "negro" si no coincide
+## funcion para guardar clasificacion
+def guardar_clasificacion(conn, material, color_funda):
+    if conn is None:
+        return
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO historial_clasificacion (material, color_funda)
+                VALUES (%s, %s)
+            """, (material, color_funda))
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        st.error(f"❌ Error guardando clasificación: {e}")
+
 st.markdown("""
 <style>
 
@@ -393,7 +408,8 @@ menu = st.sidebar.radio(
     "📋 Menú de navegación",
     ["🏠 Inicio", "🧠 Clasificación de residuos", "🧮 Predicciones de registros", "🗺️ Mapeo de cantones", "🏭 Empresas que más residuos generan", "ℹ️ Acerca de"]
 )
-
+if "ultima_prediccion_guardada" not in st.session_state:
+    st.session_state.ultima_prediccion_guardada = None
 if menu == "🏠 Inicio":
 
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
@@ -416,7 +432,6 @@ if menu == "🏠 Inicio":
         </p>
     </div>
     """, unsafe_allow_html=True)
-
 elif menu == "🧠 Clasificación de residuos":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
 
@@ -436,69 +451,67 @@ elif menu == "🧠 Clasificación de residuos":
 
     st.header("🧩 Clasificador Inteligente")
 
-    # Subir imagen
-    uploaded_file = st.file_uploader("📸 **Sube una imagen del residuo**", type=["jpg", "jpeg", "png"], label_visibility="visible")
+    uploaded_file = st.file_uploader(
+        "📸 Sube una imagen del residuo",
+        type=["jpg", "jpeg", "png"]
+    )
 
     if uploaded_file is not None:
-        # Mostrar la imagen cargada en un contenedor
         image = Image.open(uploaded_file)
-        
-        # Crear dos columnas para dividir la imagen y la predicción
+
         col1, col2 = st.columns([2, 3])
 
         with col1:
             st.image(image, caption="Imagen cargada", use_container_width=True)
 
-        # Clases de residuos en español (sin orgánico ni peligrosos)
         class_names = ['cartón', 'vidrio', 'metal', 'papel', 'plástico', 'basura']
 
-        # Realizar la predicción
-        prediccion, probabilidades = predict_and_show(image, model, infer_transforms, class_names)
+        # 🔮 PREDICCIÓN
+        prediccion, probabilidades = predict_and_show(
+            image, model, infer_transforms, class_names
+        )
 
-        # Mostrar la predicción y las probabilidades en la segunda columna
-        with col2:
-            st.markdown("""
-            <div style="background-color: black; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); color: white;">
-            <h3>Predicción: {}</h3>
-            <p>Probabilidades:</p>
-            <ul>
-                <li>cartón: {:.2f}%</li>
-                <li>vidrio: {:.2f}%</li>
-                <li>metal: {:.2f}%</li>
-                <li>papel: {:.2f}%</li>
-                <li>plástico: {:.2f}%</li>
-                <li>basura: {:.2f}%</li>
-            </ul>
-        </div>
-        """.format(prediccion, *probabilidades), unsafe_allow_html=True)
-        # Mostrar el color de la funda de basura
+        # 🎨 FUNDA
         bag_color = get_bag_color(prediccion)
 
-        st.markdown(f"<div style='background-color: #f0ad4e; padding: 10px; border-radius: 5px; color: black;'><strong>💡 El material debe ser guardado en una funda de color: {bag_color}</strong></div>", unsafe_allow_html=True)
-        # Añadir un diseño más limpio y evitar la duplicación de la imagen
-        st.markdown("</div>", unsafe_allow_html=True)
+        # 💾 GUARDAR SOLO UNA VEZ
+        if st.session_state.ultima_prediccion_guardada != prediccion:
+            guardar_clasificacion(conn, prediccion, bag_color)
+            st.session_state.ultima_prediccion_guardada = prediccion
 
-        # Aplicar el fondo blanco y cambiar el color de las letras en el área de resultados
-        st.markdown("""
-            <style>
-                .card_interno {
-                    background-color: white;
-                    padding: 10px;
-                    border-radius: 10px;
-                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                }
-                .card_interno h1 {
-                    color: #2e7d32;  # Color verde para el título
-                    font-size: 30px;
-                }
-                .card_interno p {
-                    color: #333;  # Color oscuro para el texto
-                }
-                .card_interno .stFileUploader {
-                    margin-bottom: 20px;
-                }
-            </style>
-        """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div style="background-color: black; padding: 20px; border-radius: 10px; color: white;">
+                <h3>🔮 Predicción: {prediccion}</h3>
+                <ul>
+                    <li>cartón: {probabilidades[0]:.2f}%</li>
+                    <li>vidrio: {probabilidades[1]:.2f}%</li>
+                    <li>metal: {probabilidades[2]:.2f}%</li>
+                    <li>papel: {probabilidades[3]:.2f}%</li>
+                    <li>plástico: {probabilidades[4]:.2f}%</li>
+                    <li>basura: {probabilidades[5]:.2f}%</li>
+                </ul>
+                <hr>
+                <p>🗑️ <b>Funda recomendada:</b> {bag_color}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color: #f0ad4e; padding: 10px; border-radius: 5px; color: black;'><strong>💡 El material debe ser guardado en una funda de color: {bag_color}</strong></div>", unsafe_allow_html=True) # Añadir un diseño más limpio y evitar la duplicación de la imagen st.markdown("</div>", unsafe_allow_html=True)
+
+#    # 📜 HISTORIAL
+ #   st.subheader("📜 Historial de clasificaciones")
+
+#  @st.cache_data(ttl=5)
+#    def cargar_historial():
+#        return pd.read_sql("""
+#            SELECT material, color_funda, fecha
+#            FROM historial_clasificacion
+#            ORDER BY fecha DESC
+#            LIMIT 10
+#        """, conn)
+
+#    df_historial = cargar_historial()
+#    st.dataframe(df_historial, use_container_width=True)
+
 
 
 elif menu == "🧮 Predicciones de registros":
