@@ -196,12 +196,12 @@ def predict_and_show(image, model, transform, class_names):
 # Asignación de colores de fundas
 def get_bag_color(material):
     bag_colors = {
-        "cartón": "marrón",
-        "vidrio": "verde",
-        "metal": "gris",
-        "papel": "verde",
-        "plástico": "azul",
-        "basura": "negro"
+        "cartón": "marrón",      # Cartón va en funda marrón
+        "vidrio": "verde",       # Vidrio va en funda verde
+        "metal": "celeste",      # Metal va en funda celeste
+        "papel": "celeste",      # Papel va en funda celeste
+        "plástico": "celeste",   # Plástico va en funda celeste
+        "basura": "negro"        # Basura va en funda negra
     }
     return bag_colors.get(material, "negro")  # Por defecto se asigna "negro" si no coincide
 st.markdown("""
@@ -427,9 +427,9 @@ elif menu == "🧠 Clasificación de residuos":
             <ul>
                 <li>♻️ Plástico</li>
                 <li>📄 Papel</li>
-                <li>🍃 Orgánico</li>
                 <li>🍶 Vidrio</li>
                 <li>🥫 Metal</li>
+                <li>🛑 Basura</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -449,7 +449,7 @@ elif menu == "🧠 Clasificación de residuos":
         with col1:
             st.image(image, caption="Imagen cargada", use_container_width=True)
 
-        # Clases de residuos en español
+        # Clases de residuos en español (sin orgánico ni peligrosos)
         class_names = ['cartón', 'vidrio', 'metal', 'papel', 'plástico', 'basura']
 
         # Realizar la predicción
@@ -457,19 +457,24 @@ elif menu == "🧠 Clasificación de residuos":
 
         # Mostrar la predicción y las probabilidades en la segunda columna
         with col2:
-            st.markdown("<div style='background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);'>", unsafe_allow_html=True)
-            st.subheader(f"Predicción: {prediccion}")
-            st.write(f"Probabilidades:")
+            st.markdown("""
+            <div style="background-color: black; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); color: white;">
+            <h3>Predicción: {}</h3>
+            <p>Probabilidades:</p>
+            <ul>
+                <li>cartón: {:.2f}%</li>
+                <li>vidrio: {:.2f}%</li>
+                <li>metal: {:.2f}%</li>
+                <li>papel: {:.2f}%</li>
+                <li>plástico: {:.2f}%</li>
+                <li>basura: {:.2f}%</li>
+            </ul>
+        </div>
+        """.format(prediccion, *probabilidades), unsafe_allow_html=True)
+        # Mostrar el color de la funda de basura
+        bag_color = get_bag_color(prediccion)
 
-            for cls, prob in zip(class_names, probabilidades):
-                st.write(f"{cls}: {prob * 100:.2f}%")
-
-            # Mostrar el color de la funda de basura
-            bag_color = get_bag_color(prediccion)
-            st.write(f"💡 El material debe ser guardado en una funda de color: **{bag_color}**")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
+        st.markdown(f"<div style='background-color: #f0ad4e; padding: 10px; border-radius: 5px; color: black;'><strong>💡 El material debe ser guardado en una funda de color: {bag_color}</strong></div>", unsafe_allow_html=True)
         # Añadir un diseño más limpio y evitar la duplicación de la imagen
         st.markdown("</div>", unsafe_allow_html=True)
 
