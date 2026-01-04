@@ -407,7 +407,7 @@ if menu == "🏠 Inicio":
     </div>
     """, unsafe_allow_html=True)
 
-elif menu == "🧠 Clasificación de residuos":
+if menu == "🧠 Clasificación de residuos":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
 
     with st.expander("📘 Información sobre clasificación y reciclaje"):
@@ -456,24 +456,27 @@ elif menu == "🧠 Clasificación de residuos":
         # Añadir un diseño más limpio y evitar la duplicación de la imagen
         st.markdown("</div>", unsafe_allow_html=True)
 
-# Aplicar el fondo blanco y cambiar el color de las letras en el área de resultados
-st.markdown("""
-    <style>
-        .card_interno {
-            background-color: white;
-            padding: 10px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .card_interno h1 {
-            color: #2e7d32;
-            font-size: 30px;
-        }
-        .card_interno p {
-            color: #333;
-        }
-    </style>
-""", unsafe_allow_html=True)
+        # Aplicar el fondo blanco y cambiar el color de las letras en el área de resultados
+        st.markdown("""
+            <style>
+                .card_interno {
+                    background-color: white;
+                    padding: 10px;
+                    border-radius: 10px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                }
+                .card_interno h1 {
+                    color: #2e7d32;
+                    font-size: 30px;
+                }
+                .card_interno p {
+                    color: #333;
+                }
+                .card_interno .stFileUploader {
+                margin-bottom: 20px;
+                }
+            </style>
+        """, unsafe_allow_html=True)
 elif menu == "🧮 Predicciones de registros":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
     st.header("🧮 Predicción por sector")
