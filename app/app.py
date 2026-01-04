@@ -193,7 +193,17 @@ def predict_and_show(image, model, transform, class_names):
     probs = probs.squeeze().cpu().numpy()
 
     return predicted_class, probs
-
+# Asignación de colores de fundas
+def get_bag_color(material):
+    bag_colors = {
+        "cartón": "marrón",
+        "vidrio": "verde",
+        "metal": "gris",
+        "papel": "verde",
+        "plástico": "azul",
+        "basura": "negro"
+    }
+    return bag_colors.get(material, "negro")  # Por defecto se asigna "negro" si no coincide
 st.markdown("""
 <style>
 
@@ -439,8 +449,8 @@ elif menu == "🧠 Clasificación de residuos":
         with col1:
             st.image(image, caption="Imagen cargada", use_container_width=True)
 
-        # Clases de residuos
-        class_names = ['Cartón', 'Vidrio', 'Metal', 'Papel', 'Plástico', 'Basura']
+        # Clases de residuos en español
+        class_names = ['cartón', 'vidrio', 'metal', 'papel', 'plástico', 'basura']
 
         # Realizar la predicción
         prediccion, probabilidades = predict_and_show(image, model, infer_transforms, class_names)
@@ -453,6 +463,11 @@ elif menu == "🧠 Clasificación de residuos":
 
             for cls, prob in zip(class_names, probabilidades):
                 st.write(f"{cls}: {prob * 100:.2f}%")
+
+            # Mostrar el color de la funda de basura
+            bag_color = get_bag_color(prediccion)
+            st.write(f"💡 El material debe ser guardado en una funda de color: **{bag_color}**")
+
             st.markdown("</div>", unsafe_allow_html=True)
 
         # Añadir un diseño más limpio y evitar la duplicación de la imagen
