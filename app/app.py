@@ -78,7 +78,6 @@ conn = crear_conexion(DB_CONFIG)
 MODEL_DIR = BASE_DIR / "model"
 
 @st.cache_resource
-# Eliminar el decorador para deshabilitar el caché
 def cargar_modelos_y_encoders():
     modelo_regresion = None
     modelo_clasificacion = None
@@ -86,15 +85,33 @@ def cargar_modelos_y_encoders():
     le_sector = None
 
     try:
+        # Usar rutas absolutas para asegurar que los archivos estén accesibles
         path_modelo_regresion = os.path.join(str(MODEL_DIR), "modelo_total_peso.pkl")
+        path_modelo_clasificacion = os.path.join(str(MODEL_DIR), "modelo_sector_nombre.pkl")
+        path_le_placa = os.path.join(str(MODEL_DIR), "le_placa.pkl")
+        path_le_sector = os.path.join(str(MODEL_DIR), "le_sector.pkl")
+
+        # Verificar si los archivos existen y cargarlos con pickle
         if os.path.exists(path_modelo_regresion):
             with open(path_modelo_regresion, "rb") as f:
                 modelo_regresion = pickle.load(f)
         else:
             st.warning("⚠️ Modelo de regresión no encontrado (modo demostración).")
 
-        # Cargar los otros modelos...
-        
+        if os.path.exists(path_modelo_clasificacion):
+            with open(path_modelo_clasificacion, "rb") as f:
+                modelo_clasificacion = pickle.load(f)
+        else:
+            st.warning("⚠️ Modelo de clasificación no encontrado (modo demostración).")
+
+        if os.path.exists(path_le_placa):
+            with open(path_le_placa, "rb") as f:
+                le_placa = pickle.load(f)
+
+        if os.path.exists(path_le_sector):
+            with open(path_le_sector, "rb") as f:
+                le_sector = pickle.load(f)
+
     except Exception as e:
         st.error(f"❌ Error cargando modelos/encoders: {e}")
 
