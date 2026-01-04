@@ -17,6 +17,12 @@ import plotly.express as px
 import random
 from dotenv import load_dotenv
 from pathlib import Path
+from PIL import Image
+import torch
+import torch.nn.functional as F
+from torchvision import models, transforms
+import os
+import pickle
 
 load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -71,9 +77,6 @@ def crear_conexion(db_config):
 
 conn = crear_conexion(DB_CONFIG)
 
-
-
-# Cargar modelos 
 # Cargar modelos 
 MODEL_DIR = BASE_DIR / "model"
 
@@ -153,6 +156,43 @@ def cargar_registros(_conn):
     df["placa"] = df["placa"].fillna("DESCONOCIDA")
 
     return df
+## clasificacion
+# Cargar el modelo entrenado
+MODEL_PATH = 'resnet50_hf_final.pt'  # Ajusta la ruta si es necesario
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+model = models.resnet50(weights=None)
+model.fc = torch.nn.Sequential(
+    torch.nn.Linear(model.fc.in_features, 512),
+    torch.nn.ReLU(),
+    torch.nn.Dropout(0.5),
+    torch.nn.Linear(512, 6)  # Asegúrate de que el número de clases sea correcto
+)
+model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+model = model.to(DEVICE)
+model.eval()
+
+# Transformación para la inferencia
+infer_transforms = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+])
+
+# Función de predicción
+def predict_and_show(image, model, transform, class_names):
+    input_tensor = transform(image).unsqueeze(0).to(DEVICE)
+    
+    with torch.no_grad():
+        outputs = model(input_tensor)
+        probs = F.softmax(outputs, dim=1)
+        confidence, predicted = torch.max(probs, 1)
+
+    predicted_class = class_names[predicted.item()]
+    confidence = confidence.item()
+    probs = probs.squeeze().cpu().numpy()
+
+    return predicted_class, probs
 
 st.markdown("""
 <style>
@@ -368,7 +408,6 @@ if menu == "🏠 Inicio":
     """, unsafe_allow_html=True)
 
 elif menu == "🧠 Clasificación de residuos":
-
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
 
     with st.expander("📘 Información sobre clasificación y reciclaje"):
@@ -385,17 +424,34 @@ elif menu == "🧠 Clasificación de residuos":
         </div>
         """, unsafe_allow_html=True)
 
-
     st.header("🧩 Clasificador Inteligente")
+    
+    # Subir imagen
+    uploaded_file = st.file_uploader("📸 **Sube una imagen del residuo**", type=["jpg", "jpeg", "png"], label_visibility="visible")
 
-    uploaded_file = st.file_uploader(
-        "📸 **Sube una imagen del residuo**",
-        type=["jpg", "jpeg", "png"],
-        label_visibility="visible"
-    )
+    if uploaded_file is not None:
+        # Mostrar la imagen cargada
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Imagen cargada", use_column_width=True)
+
+        # Clases de residuos
+        class_names = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
+
+        # Realizar la predicción
+        prediccion, probabilidades = predict_and_show(image, model, infer_transforms, class_names)
+
+        # Mostrar la predicción
+        st.write(f"Predicción: {prediccion}")
+        st.write(f"Probabilidades:")
+
+        for cls, prob in zip(class_names, probabilidades):
+            st.write(f"{cls}: {prob * 100:.2f}%")
+
+        # Mostrar la imagen con la predicción
+        st.write(f"Predicción: {prediccion}")
+        st.image(image, caption=f"Clasificado como: {prediccion}", use_column_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-
 elif menu == "🧮 Predicciones de registros":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
     st.header("🧮 Predicción por sector")
