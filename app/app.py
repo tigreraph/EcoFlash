@@ -55,9 +55,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-
-
+# Configuración de la base de datos
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
     "port": os.getenv("DB_PORT", "5432"),
@@ -66,7 +64,7 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD"),
     "sslmode": "require"
 }
-
+## | conexión a la base de datos
 @st.cache_resource
 def crear_conexion(db_config):
     try:
