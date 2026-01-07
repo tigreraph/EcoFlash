@@ -404,7 +404,7 @@ if st.session_state.show_portada:
 
 menu = st.sidebar.radio(
     "📋 Menú de navegación",
-    ["🏠 Inicio", "🧠 Clasificación de residuos", "🧮 Predicciones de registros", "🗺️ Mapeo de cantones", "🏭 Empresas que más residuos generan", "ℹ️ Acerca de"]
+    ["🏠 Inicio", "🧠 Clasificación de residuos", "📊 Análisis de registros", "🗺️ Mapeo de cantones", "🏭 Empresas que más residuos generan", "ℹ️ Acerca de"]
 )
 if "ultima_prediccion_guardada" not in st.session_state:
     st.session_state.ultima_prediccion_guardada = None
@@ -512,76 +512,139 @@ elif menu == "🧠 Clasificación de residuos":
 
 
 
-elif menu == "🧮 Predicciones de registros":
+elif menu == "📊 Análisis de registros":
     st.markdown('<div class="card_interno">', unsafe_allow_html=True)
-    st.header("🧮 Predicción por sector")
+    st.header("📊 Análisis de residuos – Año 2024")
 
-
+    # =========================
     # CARGA OPTIMIZADA DE DATOS
-    @st.cache_data(show_spinner=False)
-    def cargar_sectores_cached():
-        return cargar_sectores(conn)
-
+    # =========================
     @st.cache_data(show_spinner=False)
     def cargar_registros_cached():
         return cargar_registros(conn)
 
-    @st.cache_data(show_spinner=False)
-    def comparativa_por_sector(df):
-        return (
-            df.groupby("nombre_sector", as_index=False)["total"]
-            .sum()
-            .sort_values(by="total", ascending=False)
-        )
-
-    sectores_df = cargar_sectores_cached()
     registros_df = cargar_registros_cached()
 
-    sector = st.selectbox(
-        "🏙️ Selecciona un sector",
-        sectores_df["nombre_sector"].unique()
-    )
-
-    # Filtrar SOLO el sector seleccionado
-    df_sector = registros_df.loc[
-        registros_df["nombre_sector"] == sector
-    ]
-
-    if df_sector.empty:
-        st.warning("No hay datos registrados para este sector.")
+    if registros_df.empty:
+        st.warning("No existen registros disponibles.")
         st.stop()
 
- 
-    if "fecha" in df_sector.columns:
-        fig1 = px.line(
-            df_sector,
-            x="fecha",
-            y="total",
-            markers=True,
-            title=f"📈 Total de residuos - {sector}"
-        )
-        fig1.update_layout(height=350)
-        st.plotly_chart(fig1, use_container_width=True)
+    # =========================
+    # PREPROCESAMIENTO
+    # =========================
+    if "fecha" in registros_df.columns:
+        registros_df["fecha"] = pd.to_datetime(registros_df["fecha"])
+
+    # =========================
+    # EVOLUCIÓN DIARIA (TODOS LOS SECTORES)
+    # =========================
+    residuos_diarios = (
+        registros_df
+        .groupby(pd.Grouper(key="fecha", freq="D"))["total"]
+        .sum()
+        .reset_index()
+    )
+
+    fig1 = px.line(
+        residuos_diarios,
+        x="fecha",
+        y="total",
+        markers=True,
+        title="📈 Evolión diaria del total de residuos – 2024"
+    )
+
+    fig1.update_layout(
+        height=420,
+        xaxis_title="Fecha",
+        yaxis_title="Total de residuos"
+    )
+
+    st.plotly_chart(fig1, use_container_width=True)
 
 
-    st.subheader("📊 Comparación entre sectores")
+    # =========================
+    # TOTAL POR SECTOR (ANUAL)
+    # =========================
+    st.subheader("📊 Total de residuos por sector (2024)")
 
-    comparativa = comparativa_por_sector(registros_df)
-
-    st.dataframe(
-        comparativa,
-        use_container_width=True,
-        height=350
+    total_por_sector = (
+        registros_df
+        .groupby("nombre_sector", as_index=False)["total"]
+        .sum()
+        .sort_values(by="total", ascending=False)
     )
 
     fig2 = px.bar(
-        comparativa,
+        total_por_sector,
         x="nombre_sector",
         y="total",
-        title="♻️ Total de residuos por sector"
+        title="♻️ Total anual de residuos por sector – 2024",
+        text_auto=True,
+        color="nombre_sector"
     )
-    fig2.update_layout(height=400)
+
+    fig2.update_layout(height=450)
     st.plotly_chart(fig2, use_container_width=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # =========================
+    # CARGA DE DATOS
+    # =========================
+    @st.cache_data(show_spinner=False)
+    def cargar_registros_cached():
+        return cargar_registros(conn)
+
+    registros_df = cargar_registros_cached()
+
+    if registros_df.empty:
+        st.warning("No existen registros para realizar la predicción.")
+        st.stop()
+
+    # =========================
+    # PREPROCESAMIENTO
+    # =========================
+    registros_df["fecha"] = pd.to_datetime(registros_df["fecha"])
+
+    residuos_diarios = (
+        registros_df
+        .groupby(pd.Grouper(key="fecha", freq="D"))["total"]
+        .sum()
+        .reset_index()
+        .sort_values("fecha")
+    )
+
+    st.info("Presiona el botón para generar la predicción de residuos.")
+
+    # =========================
+    # BOTÓN DE PREDICCIÓN
+    # =========================
+    if st.button("🔮 Generar predicción"):
+        
+        # Promedio móvil como predicción simple
+        residuos_diarios["predicción"] = (
+            residuos_diarios["total"]
+            .rolling(window=7)
+            .mean()
+        )
+
+        fig = px.line(
+            residuos_diarios,
+            x="fecha",
+            y=["total", "predicción"],
+            title="📈 Residuos reales vs predicción (tendencia)",
+            labels={"value": "Total de residuos", "variable": "Serie"}
+        )
+
+        fig.update_layout(
+            height=450,
+            xaxis_title="Fecha",
+            yaxis_title="Residuos"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.success("Predicción generada correctamente.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -723,12 +786,10 @@ elif menu == "🏭 Empresas que más residuos generan":
 
     df_generadores = pd.DataFrame(data_generadores)
 
-
-    top_n = st.radio(
-        "📊 Seleccione el ranking",
-        options=[5, 10],
-        horizontal=True
-    )
+    # =========================
+    # TOP 10 FIJO
+    # =========================
+    top_n = 10
 
     df_top = (
         df_generadores
@@ -759,7 +820,9 @@ elif menu == "🏭 Empresas que más residuos generan":
         y="Generador",
         orientation="h",
         text="Total_Toneladas",
-        title=f"📊 Top {top_n} Generadores Especiales",
+        title="📊 Top 10 Generadores Especiales",
+        color="Generador",              # 🔥 cada empresa un color
+        color_discrete_sequence=px.colors.qualitative.Set3
     )
 
     fig_bar.update_layout(
@@ -769,7 +832,6 @@ elif menu == "🏭 Empresas que más residuos generan":
     )
 
     st.plotly_chart(fig_bar, use_container_width=True)
-
 
     st.markdown("### 📋 Detalle del ranking")
     st.dataframe(
@@ -781,6 +843,7 @@ elif menu == "🏭 Empresas que más residuos generan":
         "📌 Este ranking permite identificar a los principales generadores de residuos, "
         "sirviendo como base para estrategias de control, reciclaje y gestión ambiental."
     )
+
 
 elif menu == "ℹ️ Acerca de":
 
