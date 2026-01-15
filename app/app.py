@@ -616,9 +616,7 @@ elif menu == "📊 Análisis de registros":
 
     st.info("Presiona el botón para generar la predicción de residuos.")
 
-    # =========================
-    # BOTÓN DE PREDICCIÓN
-    # =========================
+    
     if st.button("🔮 Generar predicción"):
         
         # Promedio móvil como predicción simple
@@ -849,10 +847,25 @@ elif menu == "ℹ️ Acerca de":
 
     st.header("👩‍💻 Sobre el proyecto")
     st.write("EcoFlash — Proyecto académico del Instituto Tecnológico del Azuay (2025)")
-    st.write("Autores: Allison Bueno • Jonathan Tigre • Justin Escalante")
 
+    col1, col2, col3 = st.columns(3)
 
-st.markdown("""
-<hr>
-<center><p style='color:gray; font-size:14px'>EcoFlash © 2025 — Proyecto educativo del Instituto Tecnológico del Azuay 🌎</p></center>
-""", unsafe_allow_html=True)
+    with col1:
+        st.image("app/assets/allison.png", width=120)
+        st.markdown("**Allison Bueno**")
+        st.caption("allison.bueno@tecazuay.edu.ec")
+
+    with col2:
+        st.image("app/assets/jonathan.png", width=120)
+        st.markdown("**Jonathan Tigre**")
+        st.caption("jonathan.tigre@tecazuay.edu.ec")
+
+    with col3:
+        st.image("app/assets/justin.png", width=120)
+        st.markdown("**Justin Escalante**")
+        st.caption("justin.escalante@tecazuay.edu.ec")
+
+    st.markdown("""
+    <hr>
+    <center><p style='color:gray; font-size:14px'>EcoFlash © 2025 — Proyecto educativo del Instituto Tecnológico del Azuay 🌎</p></center>
+    """, unsafe_allow_html=True)
