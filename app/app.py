@@ -618,33 +618,70 @@ elif menu == "📊 Análisis de registros":
 
     
     if st.button("🔮 Generar predicción"):
-        
-        # Promedio móvil como predicción simple
-        residuos_diarios["predicción"] = (
+
+        # =========================
+        # PREDICCIÓN BASADA EN 2024 → PROYECCIÓN 2025
+        # =========================
+
+        # Promedio móvil de 7 días (tendencia 2024)
+        residuos_diarios["tendencia"] = (
             residuos_diarios["total"]
             .rolling(window=7)
             .mean()
         )
 
+        # Último valor de la tendencia 2024
+        ultima_tendencia = residuos_diarios["tendencia"].iloc[-1]
+
+        # Generar fechas para 2025 (ejemplo: primeros 30 días)
+        fechas_2025 = pd.date_range(
+            start="2025-01-01",
+            periods=30,
+            freq="D"
+        )
+
+        # DataFrame de predicción 2025
+        prediccion_2025 = pd.DataFrame({
+            "fecha": fechas_2025,
+            "predicción": [ultima_tendencia] * len(fechas_2025)
+        })
+
+        # =========================
+        # GRÁFICO: 2024 vs PREDICCIÓN 2025
+        # =========================
         fig = px.line(
-            residuos_diarios,
-            x="fecha",
-            y=["total", "predicción"],
-            title="📈 Residuos reales vs predicción (tendencia)",
-            labels={"value": "Total de residuos", "variable": "Serie"}
+            title="📈 Residuos reales 2024 vs Predicción 2025"
+        )
+
+        # Serie real 2024
+        fig.add_scatter(
+            x=residuos_diarios["fecha"],
+            y=residuos_diarios["total"],
+            mode="lines+markers",
+            name="Residuos reales 2024"
+        )
+
+        # Predicción 2025
+        fig.add_scatter(
+            x=prediccion_2025["fecha"],
+            y=prediccion_2025["predicción"],
+            mode="lines",
+            name="Predicción 2025",
+            line=dict(dash="dash")
         )
 
         fig.update_layout(
             height=450,
             xaxis_title="Fecha",
-            yaxis_title="Residuos"
+            yaxis_title="Total de residuos"
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-        st.success("Predicción generada correctamente.")
+        st.success("Predicción 2025 generada correctamente.")
 
     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 elif menu == "🗺️ Mapeo de cantones":
