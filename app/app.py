@@ -550,7 +550,7 @@ elif menu == "📊 Análisis de registros":
         x="fecha",
         y="total",
         markers=True,
-        title="📈 Evolión diaria del total de residuos – 2024"
+        title="📈 Evolución diaria del total de residuos – 2024"
     )
 
     fig1.update_layout(
